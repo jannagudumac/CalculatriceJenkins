@@ -1,0 +1,23 @@
+{
+  "name": "calculatricejenkins",
+  "version": "1.0.0",
+  "description": "Une application web simple pour effectuer des opérations mathématiques de base : addition, soustraction, multiplication et division.",
+  "main": "script.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jannagudumac/CalculatriceJenkins.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jannagudumac/CalculatriceJenkins/issues"
+  },
+  "homepage": "https://github.com/jannagudumac/CalculatriceJenkins#readme",
+  "dependencies": {
+    "selenium-webdriver": "^4.35.0"
+  }
+}
