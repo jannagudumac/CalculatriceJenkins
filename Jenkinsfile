@@ -1,85 +1,126 @@
-pipeline {
-    // ---------------------------
-    // Определяем агент Jenkins
-    // ---------------------------
-    // 'any' означает, что сборка может выполняться на любом доступном агенте Jenkins
-    // ⚠️ Важно: так как дальше используются команды Windows (bat), агент должен быть Windows
-    agent any
+// Импортируем необходимые классы из библиотеки selenium-webdriver
+const { Builder, By, Key } = require('selenium-webdriver');
+// Импортируем настройки Chrome
+const chrome = require('selenium-webdriver/chrome');
 
-    stages {
-        // ---------------------------
-        // Этап 1: Клонирование кода из Git
-        // ---------------------------
-        stage('Cloner le Code') {
-            steps {
-                // Шаг git скачивает репозиторий
-                // branch: 'main' → выбираем ветку main
-                // url: 'https://github.com/jannagudumac/CalculatriceJenkins.git' → адрес репозитория
-                git branch: 'main', url: 'https://github.com/jannagudumac/CalculatriceJenkins.git'
-            }
-        }
+(async function testCalculatrice() {
+    // -----------------------------
+    // 1. Настройка браузера Chrome
+    // -----------------------------
+    // Создаём объект с настройками Chrome
+    const options = new chrome.Options();
+    
+    // '--headless' → запускаем браузер без графического интерфейса (фоновые тесты)
+    options.addArguments('--headless');
 
-        // ---------------------------
-        // Этап 2: Сборка Docker-образа и запуск тестов
-        // ---------------------------
-        stage('Construire et Tester l\'Image Docker') {
-            steps {
-                script {
-                    // ---------------------------
-                    // 2.1. Сборка Docker-образа
-                    // ---------------------------
-                    // docker build → строим образ из Dockerfile в текущей папке
-                    // --no-cache → пересобираем полностью без использования кэша (чистая сборка)
-                    // -t calculatrice:${env.BUILD_ID} → тегируем образ именем calculatrice и номером сборки Jenkins
-                    bat "docker build --no-cache -t calculatrice:${env.BUILD_ID} ."
+    // '--no-sandbox' → обязательно для Docker, иначе Chrome может не запуститься
+    options.addArguments('--no-sandbox');
 
-                    // ---------------------------
-                    // 2.2. Запуск контейнера для тестов
-                    // ---------------------------
-                    // docker run → запускаем контейнер из только что созданного образа
-                    // --rm → контейнер удаляется после завершения (чтобы не оставлять мусор)
-                    // В Dockerfile прописано: поднять http-server и запустить тесты test_calculatrice.js
-                    bat "docker run --rm calculatrice:${env.BUILD_ID}"
-                }
-            }
-        }
+    // '--disable-dev-shm-usage' → обходит ограничение памяти /dev/shm в контейнере
+    options.addArguments('--disable-dev-shm-usage');
 
-        // ---------------------------
-        // Этап 3: Деплой в продакшн (только если тесты успешны)
-        // ---------------------------
-        stage('Déployer en Production') {
-            when {
-                // Проверка: если сборка успешна или ещё не определён результат, выполняем деплой
-                expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
-            }
-            steps {
-                // ---------------------------
-                // 3.1. Пауза с ручным подтверждением
-                // ---------------------------
-                // input → Jenkins останавливается и спрашивает пользователя
-                // message → сообщение на кнопке, ok → текст кнопки подтверждения
-                input message: 'Les tests ont réussi. Voulez-vous déployer en production ?', ok: 'Déployer'
+    // Создаём драйвер (экземпляр браузера) с заданными настройками
+    const driver = await new Builder()
+        .forBrowser('chrome')        // используем Chrome
+        .setChromeOptions(options)   // применяем настройки headless и Docker-специфичные
+        .build();                    // строим драйвер
 
-                script {
-                    // ---------------------------
-                    // 3.2. Удаляем старый прод-контейнер (если существует)
-                    // ---------------------------
-                    // docker rm -f calculatrice-prod → принудительно удаляем контейнер с именем calculatrice-prod
-                    // || true → на Windows это не работает, лучше заменить на безопасный способ
-                    // ⚠️ Если контейнера нет, команда может упасть
-                    bat 'docker rm -f calculatrice-prod || true'
+    try {
+        // -----------------------------
+        // 2. Открываем страницу калькулятора
+        // -----------------------------
+        // driver.get() → переходит по URL
+        await driver.get("http://localhost:8080/index.html");
 
-                    // ---------------------------
-                    // 3.3. Запуск нового продакшн-контейнера
-                    // ---------------------------
-                    // docker run -d → запускаем в фоне (detached)
-                    // -p 8081:8080 → проброс порта: на хосте 8081, внутри контейнера 8080
-                    // --name calculatrice-prod → имя контейнера для удобства управления
-                    // calculatrice:${env.BUILD_ID} → используем образ текущей сборки
-                    // npx http-server -p 8080 → запускаем http-server внутри контейнера, чтобы отдавать статические файлы
-                    bat "docker run -d -p 8081:8080 --name calculatrice-prod calculatrice:${env.BUILD_ID} npx http-server -p 8080"
-                }
-            }
-        }
+        // -----------------------------
+        // 3. Тест 1: Сложение 10 + 5
+        // -----------------------------
+        // Находим поле ввода первого числа по id и вводим "10"
+        await driver.findElement(By.id('number1')).sendKeys('10');
+
+        // Находим поле ввода второго числа по id и вводим "5"
+        await driver.findElement(By.id('number2')).sendKeys('5');
+
+        // Выбираем операцию: кликаем по выпадающему списку
+        await driver.findElement(By.css('#operation')).click();
+
+        // Выбираем "Сложение" (option с value="add")
+        await driver.findElement(By.css('option[value="add"]')).click();
+
+        // Нажимаем кнопку "Вычислить"
+        await driver.findElement(By.id('calculate')).click();
+
+        // Получаем текст результата из элемента <span> с id=result
+        let result = await driver.findElement(By.css('#result span')).getText();
+
+        // Сравниваем результат с ожидаемым и выводим в консоль
+        console.log("Addition 10 + 5:", result === '15' ? "OK ✅" : `FAIL ❌ (got: ${result})`);
+
+
+        // -----------------------------
+        // 4. Тест 2: Деление на 0
+        // -----------------------------
+        // Очищаем поля ввода перед новым тестом
+        await driver.findElement(By.id('number1')).clear();
+        await driver.findElement(By.id('number2')).clear();
+
+        // Вводим числа: 10 / 0
+        await driver.findElement(By.id('number1')).sendKeys('10');
+        await driver.findElement(By.id('number2')).sendKeys('0');
+
+        // Нажимаем "Вычислить"
+        await driver.findElement(By.id('calculate')).click();
+
+        // Получаем результат и проверяем, что деление на ноль правильно обрабатывается
+        result = await driver.findElement(By.css('#result span')).getText();
+        console.log("Division by zero:", result === 'Division par zéro impossible.' ? "OK ✅" : `FAIL ❌ (got: ${result})`);
+
+
+        // -----------------------------
+        // 5. Тест 3: Некорректный ввод
+        // -----------------------------
+        // Очищаем поля
+        await driver.findElement(By.id('number1')).clear();
+        await driver.findElement(By.id('number2')).clear();
+
+        // Вводим только второе число, первое оставляем пустым
+        await driver.findElement(By.id('number2')).sendKeys('5');
+
+        // Нажимаем "Вычислить"
+        await driver.findElement(By.id('calculate')).click();
+
+        // Проверяем, что выводится сообщение об ошибке
+        result = await driver.findElement(By.css('#result span')).getText();
+        console.log("Invalid input:", result === 'Veuillez entrer des nombres valides.' ? "OK ✅" : `FAIL ❌ (got: ${result})`);
+
+
+        // -----------------------------
+        // 6. Тест 4: Вычитание 50 - 30
+        // -----------------------------
+        // Очищаем поля
+        await driver.findElement(By.id('number1')).clear();
+        await driver.findElement(By.id('number2')).clear();
+
+        // Вводим числа
+        await driver.findElement(By.id('number1')).sendKeys('50');
+        await driver.findElement(By.id('number2')).sendKeys('30');
+
+        // Выбираем операцию вычитания
+        await driver.findElement(By.css('#operation')).click();
+        await driver.findElement(By.css('option[value="subtract"]')).click();
+
+        // Нажимаем кнопку "Вычислить"
+        await driver.findElement(By.id('calculate')).click();
+
+        // Получаем результат и проверяем
+        result = await driver.findElement(By.css('#result span')).getText();
+        console.log("Subtraction 50 - 30:", result === '20' ? "OK ✅" : `FAIL ❌ (got: ${result})`);
+
+    } finally {
+        // -----------------------------
+        // 7. Закрываем браузер
+        // -----------------------------
+        // В любом случае, даже если тесты упали, драйвер нужно закрыть
+        await driver.quit();
     }
-}
+})();
