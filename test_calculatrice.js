@@ -2,37 +2,55 @@ const { Builder, By, Key } = require('selenium-webdriver');
 const chrome = require('selenium-webdriver/chrome');
 
 (async function testCalculatrice() {
-    const options = new chrome.Options().headless().addArguments('--no-sandbox', '--disable-dev-shm-usage');
-    const driver = await new Builder().forBrowser('chrome').setChromeOptions(options).build();
+    // Создаём браузер в фоне (headless)
+    const driver = await new Builder()
+        .forBrowser('chrome')
+        .setChromeOptions(new chrome.Options().headless())
+        .build();
 
     try {
+        // Открываем страницу калькулятора
         await driver.get("http://localhost:8080/index.html");
 
-        async function runTest(number1, number2, operationSelector, expectedResult, description) {
-            await driver.findElement(By.id('number1')).clear();
-            await driver.findElement(By.id('number2')).clear();
+        // --- Тест 1: Сложение 10 + 5 ---
+        await driver.findElement(By.id('number1')).sendKeys('10');
+        await driver.findElement(By.id('number2')).sendKeys('5');
+        await driver.findElement(By.css('#operation')).click();
+        await driver.findElement(By.css('option[value="add"]')).click();
+        await driver.findElement(By.id('calculate')).click();
+        let result = await driver.findElement(By.css('#result span')).getText();
+        console.log("Addition 10 + 5:", result === '15' ? "OK ✅" : `FAIL ❌ (got: ${result})`);
 
-            if (number1 !== null) await driver.findElement(By.id('number1')).sendKeys(number1);
-            if (number2 !== null) await driver.findElement(By.id('number2')).sendKeys(number2);
+        // --- Тест 2: Деление на 0 ---
+        await driver.findElement(By.id('number1')).clear();
+        await driver.findElement(By.id('number2')).clear();
+        await driver.findElement(By.id('number1')).sendKeys('10');
+        await driver.findElement(By.id('number2')).sendKeys('0');
+        await driver.findElement(By.id('calculate')).click();
+        result = await driver.findElement(By.css('#result span')).getText();
+        console.log("Division by zero:", result === 'Division par zéro impossible.' ? "OK ✅" : `FAIL ❌ (got: ${result})`);
 
-            if (operationSelector) {
-                await driver.findElement(By.css('#operation')).click();
-                await driver.findElement(By.css(operationSelector)).click();
-            }
+        // --- Тест 3: Некорректный ввод ---
+        await driver.findElement(By.id('number1')).clear();
+        await driver.findElement(By.id('number2')).clear();
+        await driver.findElement(By.id('number2')).sendKeys('5');
+        await driver.findElement(By.id('calculate')).click();
+        result = await driver.findElement(By.css('#result span')).getText();
+        console.log("Invalid input:", result === 'Veuillez entrer des nombres valides.' ? "OK ✅" : `FAIL ❌ (got: ${result})`);
 
-            await driver.findElement(By.id('calculate')).click();
-
-            const result = await driver.findElement(By.css('#result span')).getText();
-            console.log(`${description}:`, result === expectedResult ? "Réussi ✅" : `Échoué ❌ (obtenu: ${result})`);
-        }
-
-        // --- Tests ---
-        await runTest('10', '5', 'option[value="add"]', '15', 'Test Addition');
-        await runTest('10', '0', null, 'Division par zéro impossible.', 'Test Division par Zéro');
-        await runTest(null, '5', null, 'Veuillez entrer des nombres valides.', 'Test Entrée Non Valide');
-        await runTest('50', '30', 'option[value="subtract"]', '20', 'Test Soustraction');
+        // --- Тест 4: Вычитание 50 - 30 ---
+        await driver.findElement(By.id('number1')).clear();
+        await driver.findElement(By.id('number2')).clear();
+        await driver.findElement(By.id('number1')).sendKeys('50');
+        await driver.findElement(By.id('number2')).sendKeys('30');
+        await driver.findElement(By.css('#operation')).click();
+        await driver.findElement(By.css('option[value="subtract"]')).click();
+        await driver.findElement(By.id('calculate')).click();
+        result = await driver.findElement(By.css('#result span')).getText();
+        console.log("Subtraction 50 - 30:", result === '20' ? "OK ✅" : `FAIL ❌ (got: ${result})`);
 
     } finally {
+        // Закрываем браузер
         await driver.quit();
     }
 })();

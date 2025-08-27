@@ -15,5 +15,5 @@ RUN npm install selenium-webdriver http-server --save-dev
 EXPOSE 8080
 
 # Démarrer serveur statique + attendre + lancer tests
-CMD ["sh", "-c", "npx http-server -p 8080 & sleep 5 && node test_calculatrice.js"]
+CMD ["sh", "-c", "npx http-server -p 8080 & npx wait-on http://localhost:8080 && node test_calculatrice.js"]
 
